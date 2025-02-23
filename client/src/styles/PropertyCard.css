@@ -1,0 +1,61 @@
+.property-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 10px;
+  width: 200px;
+  text-align: center;
+  background-color: #f5f5f5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-family: Arial, sans-serif;
+}
+
+.property-card img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.property-card h3 {
+  font-size: 1.1em;
+  margin: 10px 0 5px;
+  color: #333;
+}
+
+.property-card p {
+  margin: 5px 0;
+  color: #666;
+}
+
+.property-card ul {
+  list-style: none;
+  padding: 0;
+  text-align: left;
+}
+
+.property-card li {
+  margin: 5px 0;
+  color: #444;
+}
+
+.property-card button {
+  padding: 8px 16px;
+  background-color: #49c7ab; /* Match logo teal */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.property-card button:hover {
+  background-color: #3eb7a0; /* Darker shade for hover */
+}
+
+@media (max-width: 600px) {
+  .property-card {
+    width: 100%;
+    margin: 10px 0;
+  }
+}

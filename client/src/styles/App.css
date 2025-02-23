@@ -1,0 +1,28 @@
+.App {
+  text-align: center;
+  font-family: Arial, sans-serif;
+  padding: 20px;
+}
+
+.dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.property-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+@media (max-width: 600px) {
+  .dashboard {
+    padding: 10px;
+  }
+
+  .property-grid {
+    gap: 10px;
+  }
+}
