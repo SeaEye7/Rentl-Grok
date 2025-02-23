@@ -7,6 +7,8 @@ const AddTenantForm = ({ onTenantAdded, properties }) => {
     email: '',
     phone: '',
     property: '',
+    leaseStart: '', // New field for lease start
+    leaseEnd: '',   // New field for lease end
   });
 
   const handleChange = (e) => {
@@ -29,6 +31,8 @@ const AddTenantForm = ({ onTenantAdded, properties }) => {
         email: '',
         phone: '',
         property: '',
+        leaseStart: '',
+        leaseEnd: '',
       });
       alert('Tenant added successfully!');
     } catch (err) {
@@ -49,6 +53,14 @@ const AddTenantForm = ({ onTenantAdded, properties }) => {
           </option>
         ))}
       </select>
+      <label>
+        Lease Start:
+        <input type="date" name="leaseStart" value={formData.leaseStart} onChange={handleChange} />
+      </label>
+      <label>
+        Lease End:
+        <input type="date" name="leaseEnd" value={formData.leaseEnd} onChange={handleChange} />
+      </label>
       <button type="submit">Add Tenant</button>
     </form>
   );

@@ -5,11 +5,7 @@ const AddPropertyForm = ({ onPropertyAdded }) => {
   const [formData, setFormData] = useState({
     address: '',
     imageUrl: '',
-    status: 'Currently Renting',
-    leaseStart: '',
-    leaseEnd: '',
-    rentAmount: '',
-    securityDeposit: '',
+    status: 'Currently Renting', // Keep status as it’s a property attribute
   });
 
   const handleChange = (e) => {
@@ -31,10 +27,6 @@ const AddPropertyForm = ({ onPropertyAdded }) => {
         address: '',
         imageUrl: '',
         status: 'Currently Renting',
-        leaseStart: '',
-        leaseEnd: '',
-        rentAmount: '',
-        securityDeposit: '',
       });
       alert('Property added successfully!');
     } catch (err) {
@@ -46,10 +38,11 @@ const AddPropertyForm = ({ onPropertyAdded }) => {
     <form onSubmit={handleSubmit} className="add-property-form">
       <input type="text" name="address" placeholder="Address" value={formData.address} onChange={handleChange} required />
       <input type="text" name="imageUrl" placeholder="Image URL" value={formData.imageUrl} onChange={handleChange} />
-      <input type="date" name="leaseStart" value={formData.leaseStart} onChange={handleChange} required />
-      <input type="date" name="leaseEnd" value={formData.leaseEnd} onChange={handleChange} required />
-      <input type="number" name="rentAmount" placeholder="Rent Amount" value={formData.rentAmount} onChange={handleChange} required />
-      <input type="number" name="securityDeposit" placeholder="Security Deposit" value={formData.securityDeposit} onChange={handleChange} required />
+      <select name="status" value={formData.status} onChange={handleChange} required>
+        <option value="Currently Renting">Currently Renting</option>
+        <option value="Upcoming Lease">Upcoming Lease</option>
+        <option value="Vacant">Vacant</option>
+      </select>
       <button type="submit">Add Property</button>
     </form>
   );

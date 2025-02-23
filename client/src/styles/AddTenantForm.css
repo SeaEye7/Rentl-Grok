@@ -32,6 +32,21 @@
 .add-tenant-form button:hover {
   background-color: #3eb7a0; /* Darker shade for hover */
 }
+.add-tenant-form label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 1em;
+  color: #333;
+}
+
+.add-tenant-form label input {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+}
 
 @media (max-width: 600px) {
   .add-tenant-form {

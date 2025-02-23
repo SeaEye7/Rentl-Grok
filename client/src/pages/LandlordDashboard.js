@@ -14,6 +14,7 @@ const LandlordDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('Fetching data...');
         const [propertiesResponse, tenantsResponse] = await Promise.all([
           fetch('http://localhost:5001/properties'),
           fetch('http://localhost:5001/tenants')
@@ -22,9 +23,19 @@ const LandlordDashboard = () => {
         if (!tenantsResponse.ok) throw new Error('Failed to fetch tenants');
         const propertiesData = await propertiesResponse.json();
         const tenantsData = await tenantsResponse.json();
+        console.log('Properties fetched:', propertiesData);
+        console.log('Tenants fetched (raw):', tenantsData); // Log raw data
+        // Ensure tenants have consistent _id and property formats
+        const normalizedTenants = tenantsData.map(tenant => ({
+          ...tenant,
+          _id: tenant._id.toString(), // Ensure _id is a string
+          property: tenant.property?.toString() || '', // Ensure property is a string
+        }));
+        console.log('Tenants normalized:', normalizedTenants); // Log normalized data
         setProperties(propertiesData);
-        setTenants(tenantsData);
+        setTenants(normalizedTenants);
       } catch (err) {
+        console.error('Error fetching data:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -39,19 +50,29 @@ const LandlordDashboard = () => {
   };
 
   const handleTenantAdded = (newTenant) => {
-    setTenants(prevTenants => [newTenant, ...prevTenants]);
+    // Normalize the new tenant to ensure consistent _id and property formats
+    const normalizedTenant = {
+      ...newTenant,
+      _id: newTenant._id.toString(),
+      property: newTenant.property.toString(),
+    };
+    setTenants(prevTenants => [normalizedTenant, ...prevTenants]);
     setProperties(prevProperties => prevProperties.map(p => 
-      p._id === newTenant.property ? { ...p, tenants: [...p.tenants, newTenant._id] } : p
+      p._id.toString() === newTenant.property.toString() 
+        ? { ...p, tenants: [...(p.tenants || []), newTenant._id.toString()] } 
+        : p
     ));
   };
 
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
+  console.log('Current tenants in state:', tenants); // Debug current state
+
   return (
     <div className="dashboard-container">
       <nav className="sidebar">
-        <img src="/rentl-transparent.png" alt="Rentl Logo" className="logo" /> {/* Use the PNG file */}
+        <img src="/rentl-transparent.png" alt="Rentl Logo" className="logo" />
         <ul>
           <li className={activeSection === 'properties' ? 'active' : ''} onClick={() => setActiveSection('properties')}>
             Properties
