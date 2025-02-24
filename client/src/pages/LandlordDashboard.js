@@ -110,9 +110,11 @@ const LandlordDashboard = () => {
       <main className="main-content">
         {activeSection === 'properties' && (
           <>
-            <h1>Landlord Dashboard / Properties</h1>
-            <AddPropertyForm onPropertyAdded={handlePropertyAdded} />
-            <AddTenantForm onTenantAdded={handleTenantAdded} properties={properties} />
+            <h1 className="dashboard-title">Landlord Dashboard / Properties</h1> {/* Add class for centering */}
+            <div className="forms-container"> {/* New container for side-by-side forms */}
+              <AddPropertyForm onPropertyAdded={handlePropertyAdded} />
+              <AddTenantForm onTenantAdded={handleTenantAdded} properties={properties} />
+            </div>
             <div className="property-grid">
               {properties.map(property => (
                 <PropertyCard 
