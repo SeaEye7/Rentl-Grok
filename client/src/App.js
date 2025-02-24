@@ -1,10 +1,11 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // Updated import
+import { jwtDecode } from 'jwt-decode';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import LandlordDashboard from './pages/LandlordDashboard';
 import TenantDashboard from './pages/TenantDashboard';
+import PropertyDetails from './pages/PropertyDetails'; // New component
 import './styles/App.css';
 
 const App = () => {
@@ -25,6 +26,7 @@ const App = () => {
         <Route path="/register" element={<Register />} />
         <Route path="/landlord" element={<ProtectedRoute accountType="landlord"><LandlordDashboard /></ProtectedRoute>} />
         <Route path="/tenant" element={<ProtectedRoute accountType="tenant"><TenantDashboard /></ProtectedRoute>} />
+        <Route path="/properties/:id" element={<ProtectedRoute accountType="landlord"><PropertyDetails /></ProtectedRoute>} /> {/* New route */}
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>

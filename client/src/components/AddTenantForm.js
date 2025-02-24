@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import '../styles/AddTenantForm.css';
+// Remove 'import '../styles/AddTenantForm.css';'
 
 const AddTenantForm = ({ onTenantAdded, properties }) => {
   const [formData, setFormData] = useState({
@@ -7,8 +7,8 @@ const AddTenantForm = ({ onTenantAdded, properties }) => {
     email: '',
     phone: '',
     property: '',
-    leaseStart: '', // New field for lease start
-    leaseEnd: '',   // New field for lease end
+    leaseStart: '',
+    leaseEnd: '',
   });
 
   const handleChange = (e) => {
@@ -48,7 +48,7 @@ const AddTenantForm = ({ onTenantAdded, properties }) => {
       <select name="property" value={formData.property} onChange={handleChange} required>
         <option value="">Select a Property</option>
         {properties.map(property => (
-          <option key={property._id} value={property._id}>
+          <option key={property._id.toString()} value={property._id.toString()}>
             {property.address}
           </option>
         ))}

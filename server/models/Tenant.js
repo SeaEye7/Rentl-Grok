@@ -5,9 +5,9 @@ const tenantSchema = new mongoose.Schema({
   email: String,
   phone: String,
   property: { type: mongoose.Schema.Types.ObjectId, ref: 'Property' },
-  paymentMethods: [String], // e.g., card numbers or tokens (for future payment features)
-  leaseStart: Date, // New field for lease start
-  leaseEnd: Date,   // New field for lease end
+  leaseStart: Date,
+  leaseEnd: Date,
+  imgPath: String, // Optional for tenant image
 });
 
 module.exports = mongoose.model('Tenant', tenantSchema);

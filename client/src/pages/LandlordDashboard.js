@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import PropertyCard from '../components/PropertyCard';
 import AddPropertyForm from '../components/AddPropertyForm';
 import AddTenantForm from '../components/AddTenantForm';
-import '../styles/LandlordDashboard.css';
+// No CSS import needed (handled by App.css)
 
 const LandlordDashboard = () => {
   const [properties, setProperties] = useState([]);
-  const [tenants, setTenants] = useState([]);
+  const [tenants, setTenants] = useState({}); // Object to store tenants by property ID
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSection, setActiveSection] = useState('properties');
@@ -14,26 +14,41 @@ const LandlordDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         console.log('Fetching data...');
         const [propertiesResponse, tenantsResponse] = await Promise.all([
           fetch('http://localhost:5001/properties'),
-          fetch('http://localhost:5001/tenants')
+          fetch('http://localhost:5001/tenants') // Fetch all tenants
         ]);
-        if (!propertiesResponse.ok) throw new Error('Failed to fetch properties');
-        if (!tenantsResponse.ok) throw new Error('Failed to fetch tenants');
+        if (!propertiesResponse.ok) {
+          throw new Error(`Failed to fetch properties: ${propertiesResponse.status} ${propertiesResponse.statusText}`);
+        }
+        if (!tenantsResponse.ok) {
+          throw new Error(`Failed to fetch tenants: ${tenantsResponse.status} ${tenantsResponse.statusText}`);
+        }
         const propertiesData = await propertiesResponse.json();
         const tenantsData = await tenantsResponse.json();
         console.log('Properties fetched:', propertiesData);
-        console.log('Tenants fetched (raw):', tenantsData); // Log raw data
-        // Ensure tenants have consistent _id and property formats
-        const normalizedTenants = tenantsData.map(tenant => ({
-          ...tenant,
-          _id: tenant._id.toString(), // Ensure _id is a string
-          property: tenant.property?.toString() || '', // Ensure property is a string
+        console.log('Tenants fetched:', tenantsData);
+
+        // Organize tenants by property ID, handling property as an object with _id
+        const tenantsByProperty = {};
+        tenantsData.forEach(tenant => {
+          const propertyId = tenant.property._id.toString(); // Extract _id from property object and convert to string
+          if (!tenantsByProperty[propertyId]) {
+            tenantsByProperty[propertyId] = [];
+          }
+          tenantsByProperty[propertyId].push(tenant);
+        });
+
+        // Ensure properties have tenants populated as strings
+        const updatedProperties = propertiesData.map(property => ({
+          ...property,
+          tenants: property.tenants?.map(t => t.toString()) || []
         }));
-        console.log('Tenants normalized:', normalizedTenants); // Log normalized data
-        setProperties(propertiesData);
-        setTenants(normalizedTenants);
+
+        setProperties(updatedProperties);
+        setTenants(tenantsByProperty);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message);
@@ -50,15 +65,12 @@ const LandlordDashboard = () => {
   };
 
   const handleTenantAdded = (newTenant) => {
-    // Normalize the new tenant to ensure consistent _id and property formats
-    const normalizedTenant = {
-      ...newTenant,
-      _id: newTenant._id.toString(),
-      property: newTenant.property.toString(),
-    };
-    setTenants(prevTenants => [normalizedTenant, ...prevTenants]);
+    setTenants(prevTenants => ({
+      ...prevTenants,
+      [newTenant.property._id.toString()]: [...(prevTenants[newTenant.property._id.toString()] || []), newTenant]
+    }));
     setProperties(prevProperties => prevProperties.map(p => 
-      p._id.toString() === newTenant.property.toString() 
+      p._id.toString() === newTenant.property._id.toString() 
         ? { ...p, tenants: [...(p.tenants || []), newTenant._id.toString()] } 
         : p
     ));
@@ -67,12 +79,13 @@ const LandlordDashboard = () => {
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
-  console.log('Current tenants in state:', tenants); // Debug current state
-
   return (
     <div className="dashboard-container">
+      <header className="header">
+        <img src={process.env.PUBLIC_URL + '/rentl-transparent.png'} alt="Rentl Logo" className="logo" />
+        <button className="menu-toggle">≡</button>
+      </header>
       <nav className="sidebar">
-        <img src="/rentl-transparent.png" alt="Rentl Logo" className="logo" />
         <ul>
           <li className={activeSection === 'properties' ? 'active' : ''} onClick={() => setActiveSection('properties')}>
             Properties
@@ -103,9 +116,9 @@ const LandlordDashboard = () => {
             <div className="property-grid">
               {properties.map(property => (
                 <PropertyCard 
-                  key={property._id} 
+                  key={property._id.toString()} 
                   property={property} 
-                  tenants={tenants.filter(t => t.property.toString() === property._id.toString())} 
+                  tenants={tenants[property._id.toString()] || []} 
                 />
               ))}
             </div>

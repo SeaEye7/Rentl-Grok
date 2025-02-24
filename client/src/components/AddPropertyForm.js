@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import '../styles/AddPropertyForm.css';
+// Remove 'import '../styles/AddPropertyForm.css';'
 
 const AddPropertyForm = ({ onPropertyAdded }) => {
   const [formData, setFormData] = useState({
     address: '',
     imageUrl: '',
-    status: 'Currently Renting', // Keep status as it’s a property attribute
+    status: 'Currently Renting',
   });
 
   const handleChange = (e) => {

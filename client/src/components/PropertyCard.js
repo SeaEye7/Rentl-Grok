@@ -1,11 +1,17 @@
 import React from 'react';
-import '../styles/PropertyCard.css';
+import { useNavigate } from 'react-router-dom';
+// No CSS import needed (handled by App.css)
 
 const PropertyCard = ({ property, tenants }) => {
-  console.log('Rendering PropertyCard:', { property, tenants }); // Debug log
+  const navigate = useNavigate();
+
+  const handleViewDetails = () => {
+    navigate(`/properties/${property._id}`);
+  };
+
   return (
     <div className="property-card">
-      <img src={property.imageUrl} alt={property.address} />
+      <img src={property.imageUrl || 'https://via.placeholder.com/200x150'} alt={property.address} />
       <h3>{property.address}</h3>
       <p>Status: {property.status}</p>
       {tenants.length > 0 ? (
@@ -20,7 +26,7 @@ const PropertyCard = ({ property, tenants }) => {
       ) : (
         <p>No tenants assigned</p>
       )}
-      <button>View Details</button>
+      <button onClick={handleViewDetails}>View Details</button>
     </div>
   );
 };

@@ -5,6 +5,9 @@ require('dotenv').config();
 require('./models/Property');
 require('./models/Tenant');
 require('./models/User'); 
+require('./models/Payment');
+require('./models/Expense');
+require('./models/Message');
 
 const app = express();
 app.use(cors());
