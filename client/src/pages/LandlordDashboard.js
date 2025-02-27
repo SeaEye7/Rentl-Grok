@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate for navigation
 import PropertyCard from '../components/PropertyCard';
 import AddPropertyForm from '../components/AddPropertyForm';
 import AddTenantForm from '../components/AddTenantForm';
 // No CSS import needed (handled by App.css)
 
 const LandlordDashboard = () => {
+  const navigate = useNavigate(); // Initialize navigate for routing
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState({}); // Object to store tenants by property ID
   const [loading, setLoading] = useState(true);
@@ -76,6 +78,32 @@ const LandlordDashboard = () => {
     ));
   };
 
+  const handleNavigation = (section) => {
+    switch (section) {
+      case 'properties':
+        // Stay on /landlord, show properties (default behavior)
+        setActiveSection('properties');
+        break;
+      case 'payments':
+        navigate('/landlord/payments'); // Navigate to payments page
+        break;
+      case 'messages':
+        navigate('/landlord/messages'); // Navigate to messages page
+        break;
+      case 'maintenance':
+        navigate('/landlord/maintenance'); // Navigate to maintenance page
+        break;
+      case 'reports':
+        navigate('/landlord/reports'); // Navigate to reports page
+        break;
+      case 'files':
+        navigate('/landlord/files'); // Navigate to file system page
+        break;
+      default:
+        break;
+    }
+  };
+
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
@@ -87,22 +115,22 @@ const LandlordDashboard = () => {
       </header>
       <nav className="sidebar">
         <ul>
-          <li className={activeSection === 'properties' ? 'active' : ''} onClick={() => setActiveSection('properties')}>
+          <li className={activeSection === 'properties' ? 'active' : ''} onClick={() => handleNavigation('properties')}>
             Properties
           </li>
-          <li className={activeSection === 'payments' ? 'active' : ''} onClick={() => setActiveSection('payments')}>
+          <li className={activeSection === 'payments' ? 'active' : ''} onClick={() => handleNavigation('payments')}>
             Payments <span className="badge">2</span>
           </li>
-          <li className={activeSection === 'messages' ? 'active' : ''} onClick={() => setActiveSection('messages')}>
+          <li className={activeSection === 'messages' ? 'active' : ''} onClick={() => handleNavigation('messages')}>
             Messages <span className="badge">5</span>
           </li>
-          <li className={activeSection === 'maintenance' ? 'active' : ''} onClick={() => setActiveSection('maintenance')}>
+          <li className={activeSection === 'maintenance' ? 'active' : ''} onClick={() => handleNavigation('maintenance')}>
             Maintenance <span className="badge">3</span>
           </li>
-          <li className={activeSection === 'reports' ? 'active' : ''} onClick={() => setActiveSection('reports')}>
+          <li className={activeSection === 'reports' ? 'active' : ''} onClick={() => handleNavigation('reports')}>
             Reports
           </li>
-          <li className={activeSection === 'files' ? 'active' : ''} onClick={() => setActiveSection('files')}>
+          <li className={activeSection === 'files' ? 'active' : ''} onClick={() => handleNavigation('files')}>
             File System
           </li>
         </ul>
@@ -110,8 +138,8 @@ const LandlordDashboard = () => {
       <main className="main-content">
         {activeSection === 'properties' && (
           <>
-            <h1 className="dashboard-title">Landlord Dashboard / Properties</h1> {/* Add class for centering */}
-            <div className="forms-container"> {/* New container for side-by-side forms */}
+            <h1 className="dashboard-title">Landlord Dashboard / Properties</h1>
+            <div className="forms-container">
               <AddPropertyForm onPropertyAdded={handlePropertyAdded} />
               <AddTenantForm onTenantAdded={handleTenantAdded} properties={properties} />
             </div>
@@ -129,31 +157,32 @@ const LandlordDashboard = () => {
         {activeSection === 'payments' && (
           <div className="section-content">
             <h1>Payments</h1>
-            <p>Placeholder for payment history, outstanding payments, and online payments (to be implemented later).</p>
+            <p>Payments management for landlords (to be implemented later).</p>
+            {/* Add Payments management UI here later */}
           </div>
         )}
         {activeSection === 'messages' && (
           <div className="section-content">
             <h1>Messages</h1>
-            <p>Placeholder for landlord-tenant messaging (to be implemented later).</p>
+            <p>Landlord-tenant messaging (to be implemented later).</p>
           </div>
         )}
         {activeSection === 'maintenance' && (
           <div className="section-content">
             <h1>Maintenance</h1>
-            <p>Placeholder for maintenance requests (to be implemented later).</p>
+            <p>Maintenance requests management (to be implemented later).</p>
           </div>
         )}
         {activeSection === 'reports' && (
           <div className="section-content">
             <h1>Reports</h1>
-            <p>Placeholder for tax, expenses, profit/loss reports (to be implemented later).</p>
+            <p>Tax, expenses, and profit/loss reports (to be implemented later).</p>
           </div>
         )}
         {activeSection === 'files' && (
           <div className="section-content">
             <h1>File System</h1>
-            <p>Placeholder for file uploads and management (to be implemented later).</p>
+            <p>File uploads and management (to be implemented later).</p>
           </div>
         )}
       </main>

@@ -1,33 +1,42 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config();
-require('./models/Property');
-require('./models/Tenant');
-require('./models/User'); 
-require('./models/Payment');
-require('./models/Expense');
-require('./models/Message');
+const path = require('path');
+require('dotenv').config(); // Load environment variables
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// MongoDB Connection (Updated for Mongoose 6+)
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Use the properties router
-const propertiesRouter = require('./routes/properties');
-app.use('/properties', propertiesRouter);
+// Enable CORS for localhost:3000
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+}));
 
-// Use the tenants router
-const tenantsRouter = require('./routes/tenants');
-app.use('/tenants', tenantsRouter);
+// Routes
+app.use('/auth', require('./routes/auth')); // Ensure this line exists
+app.use('/properties', require('./routes/properties'));
+app.use('/tenants', require('./routes/tenants'));
+app.use('/payments', require('./routes/payments'));
+//app.use('/maintenance', require('./routes/maintenance')); // Placeholder
+//app.use('/messages', require('./routes/messages')); // Placeholder
 
-const authRouter = require('./routes/auth');
-app.use('/auth', authRouter);
+// Serve static files (if needed for production)
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'client/build')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+  });
+}
 
+// Start Server
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

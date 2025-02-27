@@ -1,51 +1,51 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// Register a new user (landlord or tenant)
+// Middleware to parse JSON body
+router.use(express.json());
+
+// Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, accountType } = req.body;
+    const { email, password, role = 'landlord' } = req.body;
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword, accountType });
-    await newUser.save();
+    const user = new User({ email, password, role });
+    await user.save();
 
-    res.status(201).json({ message: 'User registered successfully', user: { email, accountType } });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    res.status(201).json({ token, user: { email: user.email, role: user.role } });
   } catch (err) {
-    console.error('Error registering user:', err);
+    console.error('Registration Error:', err);
     res.status(500).json({ error: 'Failed to register user', message: err.message });
   }
 });
 
-// Login user
+// Login a user
 router.post('/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      console.log('Login attempt for email:', email);
-      const user = await User.findOne({ email });
-      console.log('User found:', user);
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-  
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-  
-      const token = jwt.sign({ email: user.email, accountType: user.accountType }, 'your-secret-key', { expiresIn: '1h' });
-      res.json({ token, user: { email: user.email, accountType: user.accountType } });
-    } catch (err) {
-      console.error('Error logging in:', err);
-      res.status(500).json({ error: 'Failed to login', message: err.message });
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid email or password' });
     }
-  });
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid email or password' });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    res.json({ token, user: { email: user.email, role: user.role } });
+  } catch (err) {
+    console.error('Login Error:', err);
+    res.status(500).json({ error: 'Failed to login', message: err.message });
+  }
+});
 
 module.exports = router;
