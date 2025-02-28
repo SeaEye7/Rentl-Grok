@@ -9,7 +9,11 @@ router.use(express.json());
 // Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, role = 'landlord' } = req.body;
+    const { email, password, role = 'landlord' } = req.body; // Allow role to be 'tenant'
+    if (!['landlord', 'tenant'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });

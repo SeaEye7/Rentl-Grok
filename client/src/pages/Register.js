@@ -5,6 +5,7 @@ import '../styles/App.css'; // Ensure this matches your wireframe styling
 const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('landlord'); // Default to landlord
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -14,7 +15,7 @@ const Register = () => {
       const response = await fetch('http://localhost:5001/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role }), // Include role in the request
       });
       if (!response.ok) {
         throw new Error('Registration failed');
@@ -51,6 +52,15 @@ const Register = () => {
           required
           style={{ margin: '10px 0', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
         />
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          required
+          style={{ margin: '10px 0', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', width: '100%' }}
+        >
+          <option value="landlord">Landlord</option>
+          <option value="tenant">Tenant</option>
+        </select>
         <button type="submit" style={{ backgroundColor: '#49c7ab', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
           Register
         </button>

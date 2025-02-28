@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
+import { jwtDecode } from 'jwt-decode'; // Import jwtDecode for token decoding
 
 // Initialize Stripe with your Publishable Key (replace with your actual key)
-const stripePromise = loadStripe('pk_test_51QwEtrC8qFRSv1ueGWdwFYaE8xcC1NuuoqEXaCB1waUkQVfPuN9u6kzLi18bFFYCnAMu7NRLxCH09YCLrieCO87O00DnkgGsGU'); // Use your Stripe test Publishable Key (e.g., pk_test_...)
+const stripePromise = loadStripe('pk_test_51xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); // Use your Stripe test Publishable Key (e.g., pk_test_...)
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -30,10 +31,23 @@ const PropertyDetails = () => {
     amount: '',
     type: 'Rent',
   });
+  const [maintenanceForm, setMaintenanceForm] = useState({
+    description: '',
+    status: 'Pending',
+  });
+  const [messageForm, setMessageForm] = useState({
+    sender: '',
+    message: '',
+  });
   const [selectedTenantId, setSelectedTenantId] = useState(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [selectedMaintenanceId, setSelectedMaintenanceId] = useState(null);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [stripeClient, setStripeClient] = useState(null); // State for Stripe client
   const [cardElement, setCardElement] = useState(null); // State for Stripe Card Element
+  const token = localStorage.getItem('token');
+  const decodedToken = token ? jwtDecode(token) : null;
+  const userRole = decodedToken?.role || decodedToken?.accountType || 'landlord'; // Default to 'landlord' if undefined
 
   useEffect(() => {
     const fetchPropertyAndData = async () => {
@@ -41,11 +55,21 @@ const PropertyDetails = () => {
         setLoading(true);
         console.log('Fetching property with ID:', id);
         const [propertyResponse, tenantsResponse, paymentsResponse, maintenanceResponse, messagesResponse] = await Promise.all([
-          fetch(`http://localhost:5001/properties/${id}`),
-          fetch(`http://localhost:5001/tenants/property/${id}`),
-          fetch(`http://localhost:5001/payments/property/${id}`),
-          fetch(`http://localhost:5001/maintenance/property/${id}`), // Placeholder for maintenance
-          fetch(`http://localhost:5001/messages/property/${id}`), // Placeholder for messages
+          fetch(`http://localhost:5001/properties/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch(`http://localhost:5001/tenants/property/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch(`http://localhost:5001/payments/property/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch(`http://localhost:5001/maintenance/property/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch(`http://localhost:5001/messages/property/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
         ]);
         if (!propertyResponse.ok) {
           throw new Error(`Failed to fetch property: ${propertyResponse.status} ${propertyResponse.statusText}`);
@@ -61,11 +85,14 @@ const PropertyDetails = () => {
         const paymentsData = await paymentsResponse.json();
         const maintenanceData = maintenanceResponse.ok ? await maintenanceResponse.json() : [];
         const messagesData = messagesResponse.ok ? await messagesResponse.json() : [];
-        console.log('Property fetched:', propertyData);
-        console.log('Tenants fetched:', tenantsData);
-        console.log('Payments fetched:', paymentsData);
-        console.log('Maintenance fetched:', maintenanceData);
-        console.log('Messages fetched:', messagesData);
+
+        // Check if tenant is authorized for this property
+        if (userRole === 'tenant') {
+          const tenantFound = tenantsData.some(tenant => tenant._id === decodedToken.id);
+          if (!tenantFound) {
+            throw new Error('Unauthorized: Tenant not associated with this property');
+          }
+        }
 
         setProperty(propertyData);
         setTenants(tenantsData);
@@ -90,9 +117,14 @@ const PropertyDetails = () => {
       setCardElement(card);
     };
 
-    fetchPropertyAndData();
-    initializeStripe();
-  }, [id]);
+    if (token) {
+      fetchPropertyAndData();
+      initializeStripe();
+    } else {
+      setError('Unauthorized: Please log in');
+      setLoading(false);
+    }
+  }, [id, token, userRole]); // Added userRole to dependencies to satisfy ESLint
 
   useEffect(() => {
     // Mount the Card Element to the DOM when it’s available
@@ -109,27 +141,35 @@ const PropertyDetails = () => {
         cardElement.unmount();
       }
     };
-  }, [cardElement, showPaymentsModal]);
+  }, [cardElement, showPaymentsModal]); // Dependencies updated for ESLint
 
   const handleNavigation = (section) => {
     switch (section) {
       case 'Properties':
-        navigate('/landlord'); // Back to Landlord Dashboard
+        navigate(userRole === 'landlord' ? '/landlord' : '/tenant'); // Back to respective dashboard
         break;
       case 'Payments':
-        navigate(`/properties/${id}/payments`); // Navigate to payments detail for this property
+        navigate(`/properties/${id}/payments`);
         break;
       case 'Messages':
-        navigate(`/properties/${id}/messages`); // Navigate to messages detail for this property
+        navigate(`/properties/${id}/messages`);
         break;
       case 'Maintenance':
-        navigate(`/properties/${id}/maintenance`); // Navigate to maintenance detail for this property
+        navigate(`/properties/${id}/maintenance`);
         break;
       case 'Reports':
-        navigate('/landlord/reports'); // Redirect to a reports page (optional, implement later)
+        if (userRole === 'landlord') {
+          navigate('/landlord/reports');
+        } else {
+          alert('Unauthorized: Only landlords can access reports');
+        }
         break;
       case 'File System':
-        navigate('/landlord/files'); // Redirect to a file system page (optional, implement later)
+        if (userRole === 'landlord') {
+          navigate('/landlord/files');
+        } else {
+          alert('Unauthorized: Only landlords can access the file system');
+        }
         break;
       default:
         break;
@@ -144,12 +184,24 @@ const PropertyDetails = () => {
     setPaymentForm({ ...paymentForm, [e.target.name]: e.target.value });
   };
 
+  const handleMaintenanceChange = (e) => {
+    setMaintenanceForm({ ...maintenanceForm, [e.target.name]: e.target.value });
+  };
+
+  const handleMessageChange = (e) => {
+    setMessageForm({ ...messageForm, [e.target.name]: e.target.value });
+  };
+
   const handleAddOrUpdateTenant = async (e) => {
     e.preventDefault();
+    if (userRole !== 'landlord') {
+      alert('Unauthorized: Only landlords can manage tenants');
+      return;
+    }
     try {
       const response = await fetch(`http://localhost:5001/tenants`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           ...tenantForm,
           property: id,
@@ -191,7 +243,7 @@ const PropertyDetails = () => {
 
       const response = await fetch('http://localhost:5001/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           propertyId: id,
           sender: paymentForm.sender,
@@ -212,7 +264,9 @@ const PropertyDetails = () => {
       }
 
       // After payment, update payments state (optional: poll or use webhook)
-      const updatedPaymentsResponse = await fetch(`http://localhost:5001/payments/property/${id}`);
+      const updatedPaymentsResponse = await fetch(`http://localhost:5001/payments/property/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (!updatedPaymentsResponse.ok) {
         throw new Error(`Failed to fetch updated payments: ${updatedPaymentsResponse.status} ${updatedPaymentsResponse.statusText}`);
       }
@@ -229,10 +283,67 @@ const PropertyDetails = () => {
     }
   };
 
+  const handleAddOrUpdateMaintenance = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:5001/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          propertyId: id,
+          description: maintenanceForm.description,
+          status: maintenanceForm.status,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to add maintenance request: ${response.status} ${response.statusText}`);
+      }
+      const newMaintenance = await response.json();
+      setMaintenance([...maintenance, newMaintenance]);
+      setMaintenanceForm({ description: '', status: 'Pending' });
+      setSelectedMaintenanceId(null);
+      alert('Maintenance request added successfully!');
+    } catch (err) {
+      console.error('Error adding maintenance:', err);
+      alert(`Error adding maintenance: ${err.message}`);
+    }
+  };
+
+  const handleAddOrUpdateMessage = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:5001/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          propertyId: id,
+          sender: messageForm.sender || (userRole === 'tenant' ? 'Tenant' : 'Landlord'),
+          message: messageForm.message,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to add message: ${response.status} ${response.statusText}`);
+      }
+      const newMessage = await response.json();
+      setMessages([...messages, newMessage]);
+      setMessageForm({ sender: '', message: '' });
+      setSelectedMessageId(null);
+      alert('Message sent successfully!');
+    } catch (err) {
+      console.error('Error adding message:', err);
+      alert(`Error adding message: ${err.message}`);
+    }
+  };
+
   const handleRemoveTenant = async (tenantId) => {
+    if (userRole !== 'landlord') {
+      alert('Unauthorized: Only landlords can remove tenants');
+      return;
+    }
     try {
       const response = await fetch(`http://localhost:5001/tenants/${tenantId}`, {
         method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!response.ok) {
         throw new Error(`Failed to remove tenant: ${response.status} ${response.statusText}`);
@@ -249,7 +360,7 @@ const PropertyDetails = () => {
     try {
       const response = await fetch(`http://localhost:5001/payments/${paymentId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ propertyId: id }),
       });
       if (!response.ok) {
@@ -263,15 +374,61 @@ const PropertyDetails = () => {
     }
   };
 
-  // Determine which section to display based on the URL path
+  const handleRemoveMaintenance = async (maintenanceId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/maintenance/${maintenanceId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ propertyId: id }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to remove maintenance: ${response.status} ${response.statusText}`);
+      }
+      setMaintenance(maintenance.filter(m => m._id !== maintenanceId));
+      alert('Maintenance request removed successfully!');
+    } catch (err) {
+      console.error('Error removing maintenance:', err);
+      alert(`Error removing maintenance: ${err.message}`);
+    }
+  };
+
+  const handleRemoveMessage = async (messageId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ propertyId: id }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to remove message: ${response.status} ${response.statusText}`);
+      }
+      setMessages(messages.filter(m => m._id !== messageId));
+      alert('Message removed successfully!');
+    } catch (err) {
+      console.error('Error removing message:', err);
+      alert(`Error removing message: ${err.message}`);
+    }
+  };
+
+  // Determine which section to display based on the URL path and user role
   const section = location.pathname.split('/').pop().toLowerCase();
   const renderSection = () => {
+    if (userRole === 'tenant' && !tenants.some(tenant => tenant._id === decodedToken.id)) {
+      return <div className="error">Unauthorized: You are not a tenant of this property</div>;
+    }
+
     switch (section) {
       case 'payments':
         return (
           <div className="payments">
             <h3>Payments</h3>
-            <button className="manage-payments-button" onClick={() => setShowPaymentsModal(true)}>Manage Payments</button>
+            <button 
+              className="manage-payments-button" 
+              onClick={() => setShowPaymentsModal(true)}
+              disabled={userRole === 'tenant' && !paymentForm.sender} // Disable for tenants without sender
+            >
+              Manage Payments
+            </button>
             {payments.length > 0 ? (
               <table>
                 <thead>
@@ -291,8 +448,12 @@ const PropertyDetails = () => {
                       <td>{payment.type || 'N/A'}</td>
                       <td>{new Date(payment.date).toLocaleDateString()}</td>
                       <td>
-                        <button onClick={() => { setShowPaymentsModal(true); setPaymentForm({ sender: payment.sender, amount: payment.amount, type: payment.type }); setSelectedPaymentId(payment._id); }}>Edit</button>
-                        <button onClick={() => handleRemovePayment(payment._id.toString())}>Remove</button>
+                        {userRole === 'landlord' && (
+                          <>
+                            <button onClick={() => { setShowPaymentsModal(true); setPaymentForm({ sender: payment.sender, amount: payment.amount, type: payment.type }); setSelectedPaymentId(payment._id); }}>Edit</button>
+                            <button onClick={() => handleRemovePayment(payment._id.toString())}>Remove</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -307,34 +468,52 @@ const PropertyDetails = () => {
         return (
           <div className="maintenance">
             <h3>Maintenance</h3>
+            <button 
+              className="manage-maintenance-button" 
+              onClick={() => setShowTenantsModal(true)} // Reuse tenants modal for maintenance (update later)
+              disabled={userRole === 'landlord'} // Disable for landlords (tenants submit, landlords manage)
+            >
+              Manage Maintenance
+            </button>
             {maintenance.length > 0 ? (
               maintenance.map(request => (
                 <div key={request._id.toString()} className="maintenance-card">
                   <p><strong>{request.date ? new Date(request.date).toLocaleDateString() : 'N/A'}</strong> - {request.description || 'N/A'}</p>
                   <p>Status: {request.status || 'Pending'}</p>
+                  {userRole === 'landlord' && (
+                    <button onClick={() => handleRemoveMaintenance(request._id.toString())}>Remove</button>
+                  )}
                 </div>
               ))
             ) : (
               <p>No maintenance requests recorded</p>
             )}
-            <button className="manage-maintenance-button" onClick={() => alert('Manage Maintenance to be implemented')}>Manage Maintenance</button>
           </div>
         );
       case 'messages':
         return (
           <div className="messages">
             <h3>Messages</h3>
+            <button 
+              className="manage-messages-button" 
+              onClick={() => setShowTenantsModal(true)} // Reuse tenants modal for messages (update later)
+              disabled={userRole === 'landlord'} // Disable for landlords (tenants send, landlords view)
+            >
+              Manage Messages
+            </button>
             {messages.length > 0 ? (
               messages.map(message => (
                 <div key={message._id.toString()} className="message-card">
                   <p><strong>{message.date ? new Date(message.date).toLocaleDateString() : 'N/A'}</strong> - {message.sender || 'N/A'}</p>
                   <p>{message.message || 'N/A'}</p>
+                  {userRole === 'landlord' && (
+                    <button onClick={() => handleRemoveMessage(message._id.toString())}>Remove</button>
+                  )}
                 </div>
               ))
             ) : (
               <p>No messages recorded</p>
             )}
-            <button className="manage-messages-button" onClick={() => alert('Manage Messages to be implemented')}>Manage Messages</button>
           </div>
         );
       default:
@@ -356,38 +535,50 @@ const PropertyDetails = () => {
             <div className="details-grid">
               <div className="tenants-section">
                 <h3>Tenants</h3>
-                <button className="manage-tenants-button" onClick={() => setShowTenantsModal(true)}>Manage Tenants</button>
-                {tenants.length > 0 ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ImgPath</th>
-                        <th>Name</th>
-                        <th>ID</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tenants.map(tenant => (
-                        <tr key={tenant._id.toString()}>
-                          <td><img src={tenant.imgPath || 'https://via.placeholder.com/50'} alt={tenant.name} className="tenant-avatar" /></td>
-                          <td>{tenant.name}</td>
-                          <td>{tenant._id.toString()}</td>
-                          <td>
-                            <button onClick={() => handleRemoveTenant(tenant._id.toString())}>Remove</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {userRole === 'landlord' ? (
+                  <>
+                    <button className="manage-tenants-button" onClick={() => setShowTenantsModal(true)}>Manage Tenants</button>
+                    {tenants.length > 0 ? (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>ImgPath</th>
+                            <th>Name</th>
+                            <th>ID</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tenants.map(tenant => (
+                            <tr key={tenant._id.toString()}>
+                              <td><img src={tenant.imgPath || 'https://via.placeholder.com/50'} alt={tenant.name} className="tenant-avatar" /></td>
+                              <td>{tenant.name}</td>
+                              <td>{tenant._id.toString()}</td>
+                              <td>
+                                <button onClick={() => handleRemoveTenant(tenant._id.toString())}>Remove</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p>No tenants assigned</p>
+                    )}
+                  </>
                 ) : (
-                  <p>No tenants assigned</p>
+                  <p>You are a tenant of this property.</p>
                 )}
               </div>
               <div className="payments-expenses">
                 <div className="payments">
                   <h3>Payments</h3>
-                  <button className="manage-payments-button" onClick={() => setShowPaymentsModal(true)}>Manage Payments</button>
+                  <button 
+                    className="manage-payments-button" 
+                    onClick={() => setShowPaymentsModal(true)}
+                    disabled={userRole === 'tenant' && !paymentForm.sender} // Disable for tenants without sender
+                  >
+                    Manage Payments
+                  </button>
                   {payments.length > 0 ? (
                     <table>
                       <thead>
@@ -407,8 +598,12 @@ const PropertyDetails = () => {
                             <td>{payment.type || 'N/A'}</td>
                             <td>{new Date(payment.date).toLocaleDateString()}</td>
                             <td>
-                              <button onClick={() => { setShowPaymentsModal(true); setPaymentForm({ sender: payment.sender, amount: payment.amount, type: payment.type }); setSelectedPaymentId(payment._id); }}>Edit</button>
-                              <button onClick={() => handleRemovePayment(payment._id.toString())}>Remove</button>
+                              {userRole === 'landlord' && (
+                                <>
+                                  <button onClick={() => { setShowPaymentsModal(true); setPaymentForm({ sender: payment.sender, amount: payment.amount, type: payment.type }); setSelectedPaymentId(payment._id); }}>Edit</button>
+                                  <button onClick={() => handleRemovePayment(payment._id.toString())}>Remove</button>
+                                </>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -446,11 +641,21 @@ const PropertyDetails = () => {
               </div>
               <div className="messages">
                 <h3>Messages</h3>
+                <button 
+                  className="manage-messages-button" 
+                  onClick={() => setShowTenantsModal(true)} // Reuse tenants modal for messages (update later)
+                  disabled={userRole === 'landlord'} // Disable for landlords (tenants send, landlords view)
+                >
+                  Manage Messages
+                </button>
                 {messages.length > 0 ? (
                   messages.map(message => (
                     <div key={message._id.toString()} className="message-card">
                       <p><strong>{message.date ? new Date(message.date).toLocaleDateString() : 'N/A'}</strong> - {message.sender || 'N/A'}</p>
                       <p>{message.message || 'N/A'}</p>
+                      {userRole === 'landlord' && (
+                        <button onClick={() => handleRemoveMessage(message._id.toString())}>Remove</button>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -459,22 +664,37 @@ const PropertyDetails = () => {
               </div>
               <div className="maintenance">
                 <h3>Maintenance</h3>
+                <button 
+                  className="manage-maintenance-button" 
+                  onClick={() => setShowTenantsModal(true)} // Reuse tenants modal for maintenance (update later)
+                  disabled={userRole === 'landlord'} // Disable for landlords (tenants submit, landlords manage)
+                >
+                  Manage Maintenance
+                </button>
                 {maintenance.length > 0 ? (
                   maintenance.map(request => (
                     <div key={request._id.toString()} className="maintenance-card">
                       <p><strong>{request.date ? new Date(request.date).toLocaleDateString() : 'N/A'}</strong> - {request.description || 'N/A'}</p>
                       <p>Status: {request.status || 'Pending'}</p>
+                      {userRole === 'landlord' && (
+                        <button onClick={() => handleRemoveMaintenance(request._id.toString())}>Remove</button>
+                      )}
                     </div>
                   ))
                 ) : (
                   <p>No maintenance requests recorded</p>
                 )}
-                <button className="manage-maintenance-button" onClick={() => alert('Manage Maintenance to be implemented')}>Manage Maintenance</button>
               </div>
             </div>
           </>
         );
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token'); // Clear the JWT token
+    localStorage.removeItem('user'); // Clear user data if stored
+    navigate('/login'); // Redirect to login page
   };
 
   if (loading) return <div className="loading">Loading...</div>;
@@ -485,7 +705,12 @@ const PropertyDetails = () => {
     <div className="property-details-container">
       <header className="header">
         <img src={process.env.PUBLIC_URL + '/rentl-transparent.png'} alt="Rentl Logo" className="logo" />
-        <button className="menu-toggle">≡</button>
+        <button 
+          onClick={handleLogout}
+          className="logout-button"
+        >
+          Logout
+        </button>
       </header>
       <nav className="sidebar">
         <ul>
@@ -493,8 +718,12 @@ const PropertyDetails = () => {
           <li onClick={() => handleNavigation('Payments')}>Payments <span className="badge">2</span></li>
           <li onClick={() => handleNavigation('Messages')}>Messages <span className="badge">5</span></li>
           <li onClick={() => handleNavigation('Maintenance')}>Maintenance <span className="badge">3</span></li>
-          <li onClick={() => handleNavigation('Reports')}>Reports</li>
-          <li onClick={() => handleNavigation('File System')}>File System</li>
+          {userRole === 'landlord' && (
+            <>
+              <li onClick={() => handleNavigation('Reports')}>Reports</li>
+              <li onClick={() => handleNavigation('File System')}>File System</li>
+            </>
+          )}
         </ul>
       </nav>
       <main className="main-content">
@@ -502,34 +731,66 @@ const PropertyDetails = () => {
       </main>
 
       {showTenantsModal && (
-        <div className="modal-overlay" onClick={() => { setShowTenantsModal(false); setSelectedTenantId(null); }}>
+        <div className="modal-overlay" onClick={() => { 
+          setShowTenantsModal(false); 
+          setSelectedTenantId(null); 
+          setMaintenanceForm({ description: '', status: 'Pending' }); 
+          setMessageForm({ sender: '', message: '' }); 
+        }}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Manage Tenants</h3>
-            <form onSubmit={handleAddOrUpdateTenant}>
-              <input type="text" name="name" placeholder="Name" value={tenantForm.name} onChange={handleTenantChange} required />
-              <input type="email" name="email" placeholder="Email" value={tenantForm.email} onChange={handleTenantChange} required />
-              <input type="tel" name="phone" placeholder="Phone" value={tenantForm.phone} onChange={handleTenantChange} required />
-              <label>
-                Lease Start:
-                <input type="date" name="leaseStart" value={tenantForm.leaseStart} onChange={handleTenantChange} required />
-              </label>
-              <label>
-                Lease End:
-                <input type="date" name="leaseEnd" value={tenantForm.leaseEnd} onChange={handleTenantChange} required />
-              </label>
-              <button type="submit">Add Tenant</button>
-              <button type="button" onClick={() => { setShowTenantsModal(false); setSelectedTenantId(null); setTenantForm({ name: '', email: '', phone: '', leaseStart: '', leaseEnd: '' }); }}>Close</button>
+            <h3>{userRole === 'landlord' ? 'Manage Tenants' : userRole === 'tenant' ? 'Submit Maintenance Request' : 'Manage Messages'}</h3>
+            <form onSubmit={userRole === 'landlord' ? handleAddOrUpdateTenant : userRole === 'tenant' ? handleAddOrUpdateMaintenance : handleAddOrUpdateMessage}>
+              {userRole === 'landlord' ? (
+                <>
+                  <input type="text" name="name" placeholder="Name" value={tenantForm.name} onChange={handleTenantChange} required />
+                  <input type="email" name="email" placeholder="Email" value={tenantForm.email} onChange={handleTenantChange} required />
+                  <input type="tel" name="phone" placeholder="Phone" value={tenantForm.phone} onChange={handleTenantChange} required />
+                  <label>
+                    Lease Start:
+                    <input type="date" name="leaseStart" value={tenantForm.leaseStart} onChange={handleTenantChange} required />
+                  </label>
+                  <label>
+                    Lease End:
+                    <input type="date" name="leaseEnd" value={tenantForm.leaseEnd} onChange={handleTenantChange} required />
+                  </label>
+                </>
+              ) : userRole === 'tenant' ? (
+                <>
+                  <input type="text" name="description" placeholder="Description" value={maintenanceForm.description} onChange={handleMaintenanceChange} required />
+                  <select name="status" value={maintenanceForm.status} onChange={handleMaintenanceChange} required>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </>
+              ) : (
+                <>
+                  <input type="text" name="sender" placeholder="Your Name" value={messageForm.sender} onChange={handleMessageChange} required />
+                  <textarea name="message" placeholder="Message" value={messageForm.message} onChange={handleMessageChange} required style={{ width: '100%', margin: '10px 0', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
+                </>
+              )}
+              <button type="submit">{userRole === 'landlord' ? 'Add Tenant' : userRole === 'tenant' ? 'Submit Maintenance' : 'Send Message'}</button>
+              <button type="button" onClick={() => { 
+                setShowTenantsModal(false); 
+                setSelectedTenantId(null); 
+                setMaintenanceForm({ description: '', status: 'Pending' }); 
+                setMessageForm({ sender: '', message: '' }); 
+              }}>Close</button>
             </form>
           </div>
         </div>
       )}
 
       {showPaymentsModal && (
-        <div className="modal-overlay" onClick={() => { setShowPaymentsModal(false); setSelectedPaymentId(null); }}>
+        <div className="modal-overlay" onClick={() => { 
+          setShowPaymentsModal(false); 
+          setSelectedPaymentId(null); 
+          setPaymentForm({ sender: '', amount: '', type: 'Rent' }); 
+        }}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>{selectedPaymentId ? 'Edit Payment' : 'Manage Payments'}</h3>
             <form id="payment-form" onSubmit={handleAddOrUpdatePayment}>
-              <input type="text" name="sender" placeholder="Sender (Tenant Name)" value={paymentForm.sender} onChange={handlePaymentChange} required />
+              <input type="text" name="sender" placeholder="Sender (Tenant Name)" value={paymentForm.sender} onChange={handlePaymentChange} required disabled={userRole === 'tenant'} />
               <input type="number" name="amount" placeholder="Amount" value={paymentForm.amount} onChange={handlePaymentChange} step="0.01" required />
               <select name="type" value={paymentForm.type} onChange={handlePaymentChange} required>
                 <option value="Rent">Rent</option>
@@ -538,7 +799,11 @@ const PropertyDetails = () => {
               </select>
               <div id="card-element" style={{ margin: '10px 0', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }}></div>
               <button type="submit">{selectedPaymentId ? 'Update Payment' : 'Process Payment'}</button>
-              <button type="button" onClick={() => { setShowPaymentsModal(false); setSelectedPaymentId(null); setPaymentForm({ sender: '', amount: '', type: 'Rent' }); }}>Close</button>
+              <button type="button" onClick={() => { 
+                setShowPaymentsModal(false); 
+                setSelectedPaymentId(null); 
+                setPaymentForm({ sender: '', amount: '', type: 'Rent' }); 
+              }}>Close</button>
               <div id="card-errors" style={{ color: 'red', fontSize: '12px' }}></div>
             </form>
           </div>

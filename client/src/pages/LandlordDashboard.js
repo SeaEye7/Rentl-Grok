@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'; // Import useNavigate for naviga
 import PropertyCard from '../components/PropertyCard';
 import AddPropertyForm from '../components/AddPropertyForm';
 import AddTenantForm from '../components/AddTenantForm';
-// No CSS import needed (handled by App.css)
 
 const LandlordDashboard = () => {
   const navigate = useNavigate(); // Initialize navigate for routing
@@ -18,9 +17,14 @@ const LandlordDashboard = () => {
       try {
         setLoading(true);
         console.log('Fetching data...');
+        const token = localStorage.getItem('token'); // Ensure token is fetched from localStorage
         const [propertiesResponse, tenantsResponse] = await Promise.all([
-          fetch('http://localhost:5001/properties'),
-          fetch('http://localhost:5001/tenants') // Fetch all tenants
+          fetch('http://localhost:5001/properties', {
+            headers: { 'Authorization': `Bearer ${token}` }, // Add Authorization header
+          }),
+          fetch('http://localhost:5001/tenants', {
+            headers: { 'Authorization': `Bearer ${token}` }, // Add Authorization header
+          }),
         ]);
         if (!propertiesResponse.ok) {
           throw new Error(`Failed to fetch properties: ${propertiesResponse.status} ${propertiesResponse.statusText}`);
@@ -36,31 +40,31 @@ const LandlordDashboard = () => {
         // Organize tenants by property ID, handling property as an object with _id
         const tenantsByProperty = {};
         tenantsData.forEach(tenant => {
-          const propertyId = tenant.property._id.toString(); // Extract _id from property object and convert to string
+          const propertyId = tenant.property?._id?.toString() || ''; // Safely handle missing property._id
           if (!tenantsByProperty[propertyId]) {
             tenantsByProperty[propertyId] = [];
           }
           tenantsByProperty[propertyId].push(tenant);
         });
 
-        // Ensure properties have tenants populated as strings
+        // Ensure properties have tenants populated as strings, safely handle missing tenants
         const updatedProperties = propertiesData.map(property => ({
           ...property,
-          tenants: property.tenants?.map(t => t.toString()) || []
+          tenants: (property.tenants?.map(t => t?.toString()) || []).filter(Boolean), // Filter out undefined/null
         }));
 
         setProperties(updatedProperties);
         setTenants(tenantsByProperty);
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError(err.message);
+        setError(err.message || 'An error occurred while fetching data');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, []); // No dependencies needed since token is fetched from localStorage
 
   const handlePropertyAdded = (newProperty) => {
     setProperties(prevProperties => [newProperty, ...prevProperties]);
@@ -69,11 +73,11 @@ const LandlordDashboard = () => {
   const handleTenantAdded = (newTenant) => {
     setTenants(prevTenants => ({
       ...prevTenants,
-      [newTenant.property._id.toString()]: [...(prevTenants[newTenant.property._id.toString()] || []), newTenant]
+      [newTenant.property?._id?.toString() || '']: [...(prevTenants[newTenant.property?._id?.toString() || ''] || []), newTenant]
     }));
     setProperties(prevProperties => prevProperties.map(p => 
-      p._id.toString() === newTenant.property._id.toString() 
-        ? { ...p, tenants: [...(p.tenants || []), newTenant._id.toString()] } 
+      p._id?.toString() === newTenant.property?._id?.toString() 
+        ? { ...p, tenants: [...(p.tenants || []), newTenant._id?.toString() || ''] } 
         : p
     ));
   };
@@ -81,37 +85,50 @@ const LandlordDashboard = () => {
   const handleNavigation = (section) => {
     switch (section) {
       case 'properties':
-        // Stay on /landlord, show properties (default behavior)
         setActiveSection('properties');
         break;
       case 'payments':
-        navigate('/landlord/payments'); // Navigate to payments page
+        navigate('/landlord/payments');
         break;
       case 'messages':
-        navigate('/landlord/messages'); // Navigate to messages page
+        navigate('/landlord/messages');
         break;
       case 'maintenance':
-        navigate('/landlord/maintenance'); // Navigate to maintenance page
+        navigate('/landlord/maintenance');
         break;
       case 'reports':
-        navigate('/landlord/reports'); // Navigate to reports page
+        navigate('/landlord/reports');
         break;
       case 'files':
-        navigate('/landlord/files'); // Navigate to file system page
+        navigate('/landlord/files');
         break;
       default:
         break;
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token'); // Clear the JWT token
+    localStorage.removeItem('user'); // Clear user data if stored
+    navigate('/login'); // Redirect to login page
+  };
+
   if (loading) return <div className="loading">Loading...</div>;
-  if (error) return <div className="error">Error: {error}</div>;
+  if (error) return <div className="error">{error}</div>;
 
   return (
     <div className="dashboard-container">
       <header className="header">
         <img src={process.env.PUBLIC_URL + '/rentl-transparent.png'} alt="Rentl Logo" className="logo" />
-        <button className="menu-toggle">≡</button>
+        <div className="header-actions">
+          <button className="menu-toggle">≡</button>
+          <button 
+            onClick={() => handleLogout()}
+            className="logout-button"
+          >
+            Logout
+          </button>
+        </div>
       </header>
       <nav className="sidebar">
         <ul>
@@ -146,9 +163,9 @@ const LandlordDashboard = () => {
             <div className="property-grid">
               {properties.map(property => (
                 <PropertyCard 
-                  key={property._id.toString()} 
+                  key={property._id?.toString() || ''} 
                   property={property} 
-                  tenants={tenants[property._id.toString()] || []} 
+                  tenants={tenants[property._id?.toString() || ''] || []} 
                 />
               ))}
             </div>

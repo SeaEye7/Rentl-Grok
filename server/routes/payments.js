@@ -2,16 +2,38 @@ const express = require('express');
 const router = express.Router();
 const Property = require('../models/Property');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Use environment variable for Secret Key
+const jwt = require('jsonwebtoken');
 
 // Middleware to parse JSON body
 router.use(express.json());
 
+// Middleware to authenticate and get user from token
+const authenticateToken = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
 // Fetch payments for a property (from Property model, not Stripe)
-router.get('/property/:id', async (req, res) => {
+router.get('/property/:id', authenticateToken, async (req, res) => {
   try {
     const propertyId = req.params.id;
     const property = await Property.findById(propertyId).select('payments');
     if (!property) return res.status(404).json({ error: 'Property not found' });
+
+    // Check if tenant is authorized for this property
+    if (req.user.role === 'tenant') {
+      const tenantFound = property.tenants.some(tenant => tenant._id.toString() === req.user.id);
+      if (!tenantFound) {
+        return res.status(403).json({ error: 'Unauthorized: Tenant not associated with this property' });
+      }
+    }
+
     res.json(property.payments);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch payments', message: err.message });
@@ -19,10 +41,10 @@ router.get('/property/:id', async (req, res) => {
 });
 
 // Process a payment using Stripe and update property
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { propertyId, sender, amount, type, paymentMethodId } = req.body; // paymentMethodId from Stripe frontend
-    console.log('Received payment request:', { propertyId, sender, amount, type, paymentMethodId }); // Log request data for debugging
+    const { propertyId, sender, amount, type, paymentMethodId } = req.body;
+    console.log('Received payment request:', { propertyId, sender, amount, type, paymentMethodId });
 
     // Validate propertyId as a valid ObjectId
     if (!propertyId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -31,6 +53,14 @@ router.post('/', async (req, res) => {
 
     const property = await Property.findById(propertyId);
     if (!property) return res.status(404).json({ error: 'Property not found' });
+
+    // Check if tenant is authorized for this property
+    if (req.user.role === 'tenant') {
+      const tenantFound = property.tenants.some(tenant => tenant._id.toString() === req.user.id);
+      if (!tenantFound) {
+        return res.status(403).json({ error: 'Unauthorized: Tenant not associated with this property' });
+      }
+    }
 
     // Validate paymentMethodId
     if (!paymentMethodId || typeof paymentMethodId !== 'string') {
@@ -50,7 +80,7 @@ router.post('/', async (req, res) => {
       },
     });
 
-    // Add payment to property's payments array
+    // Add payment to property's payments array (matches paymentSchema)
     property.payments.push({
       sender,
       amount,
@@ -72,7 +102,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update a payment (e.g., for corrections, not re-charging)
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const paymentId = req.params.id;
     const { propertyId, sender, amount, type } = req.body;
@@ -83,6 +113,11 @@ router.put('/:id', async (req, res) => {
 
     const property = await Property.findById(propertyId);
     if (!property) return res.status(404).json({ error: 'Property not found' });
+
+    // Check if landlord is authorized (tenants can’t update payments)
+    if (req.user.role === 'tenant') {
+      return res.status(403).json({ error: 'Unauthorized: Only landlords can update payments' });
+    }
 
     const paymentIndex = property.payments.findIndex(p => p._id.toString() === paymentId);
     if (paymentIndex === -1) return res.status(404).json({ error: 'Payment not found' });
@@ -96,7 +131,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Remove a payment (no refund via Stripe, just update property data)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const paymentId = req.params.id;
     const { propertyId } = req.body;
@@ -107,6 +142,11 @@ router.delete('/:id', async (req, res) => {
 
     const property = await Property.findById(propertyId);
     if (!property) return res.status(404).json({ error: 'Property not found' });
+
+    // Check if landlord is authorized (tenants can’t remove payments)
+    if (req.user.role === 'tenant') {
+      return res.status(403).json({ error: 'Unauthorized: Only landlords can remove payments' });
+    }
 
     const paymentIndex = property.payments.findIndex(p => p._id.toString() === paymentId);
     if (paymentIndex === -1) return res.status(404).json({ error: 'Payment not found' });

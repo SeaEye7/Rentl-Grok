@@ -5,6 +5,34 @@ const Tenant = require('../models/Tenant');
 const Payment = require('../models/Payment');
 const Expense = require('../models/Expense');
 const Message = require('../models/Message');
+const jwt = require('jsonwebtoken');
+
+router.use(express.json());
+
+const authenticateToken = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Get properties leased by the authenticated tenant
+router.get('/tenant', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user.id; // Get tenant ID from JWT
+    const properties = await Property.find({
+      'tenants._id': tenantId, // Find properties where this tenant is listed
+    }).select('address status rentAmount imageUrl'); // Return only relevant fields
+    res.json(properties);
+  } catch (err) {
+    console.error('Error fetching tenant properties:', err);
+    res.status(500).json({ error: 'Failed to fetch leased properties', message: err.message });
+  }
+});
 
 router.get('/:id', async (req, res) => {
   try {
