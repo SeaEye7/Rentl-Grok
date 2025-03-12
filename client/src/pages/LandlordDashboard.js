@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'; // Import useNavigate for naviga
 import PropertyCard from '../components/PropertyCard';
 import AddPropertyForm from '../components/AddPropertyForm';
 import AddTenantForm from '../components/AddTenantForm';
+import { jwtDecode } from 'jwt-decode'; // Import jwt-decode for token decoding
 
 const LandlordDashboard = () => {
   const navigate = useNavigate(); // Initialize navigate for routing
@@ -13,38 +14,56 @@ const LandlordDashboard = () => {
   const [activeSection, setActiveSection] = useState('properties');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchLandlordData = async () => {
       try {
         setLoading(true);
-        console.log('Fetching data...');
-        const token = localStorage.getItem('token'); // Ensure token is fetched from localStorage
-        const [propertiesResponse, tenantsResponse] = await Promise.all([
-          fetch('http://localhost:5001/properties', {
-            headers: { 'Authorization': `Bearer ${token}` }, // Add Authorization header
-          }),
-          fetch('http://localhost:5001/tenants', {
-            headers: { 'Authorization': `Bearer ${token}` }, // Add Authorization header
-          }),
-        ]);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found. Please log in.');
+        }
+
+        // Decode the JWT token to get the landlord's ID and role
+        const decodedToken = jwtDecode(token);
+        const landlordId = decodedToken.id; // Adjust this based on your JWT structure (e.g., 'id', 'userId', or 'landlordId')
+        const role = decodedToken.role || decodedToken.accountType; // Ensure role is correctly extracted
+        if (role !== 'landlord') {
+          throw new Error('Unauthorized: Only landlords can access this dashboard.');
+        }
+
+        console.log('Fetching data for landlord ID:', landlordId);
+
+        // Fetch properties specific to the landlord
+        const propertiesResponse = await fetch(`http://localhost:5001/properties?landlordId=${landlordId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
         if (!propertiesResponse.ok) {
           throw new Error(`Failed to fetch properties: ${propertiesResponse.status} ${propertiesResponse.statusText}`);
         }
+        const propertiesData = await propertiesResponse.json();
+        console.log('Properties fetched:', propertiesData);
+
+        // Fetch all tenants (or filter by properties if your API supports it)
+        const tenantsResponse = await fetch('http://localhost:5001/tenants', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
         if (!tenantsResponse.ok) {
           throw new Error(`Failed to fetch tenants: ${tenantsResponse.status} ${tenantsResponse.statusText}`);
         }
-        const propertiesData = await propertiesResponse.json();
         const tenantsData = await tenantsResponse.json();
-        console.log('Properties fetched:', propertiesData);
         console.log('Tenants fetched:', tenantsData);
 
-        // Organize tenants by property ID, handling property as an object with _id
+        // Organize tenants by property ID, filtering for properties owned by the landlord
         const tenantsByProperty = {};
         tenantsData.forEach(tenant => {
-          const propertyId = tenant.property?._id?.toString() || ''; // Safely handle missing property._id
-          if (!tenantsByProperty[propertyId]) {
-            tenantsByProperty[propertyId] = [];
+          const propertyId = tenant.property?._id?.toString() || '';
+          // Only include tenants for properties owned by this landlord
+          const property = propertiesData.find(p => p._id.toString() === propertyId);
+          if (property) {
+            if (!tenantsByProperty[propertyId]) {
+              tenantsByProperty[propertyId] = [];
+            }
+            tenantsByProperty[propertyId].push(tenant);
           }
-          tenantsByProperty[propertyId].push(tenant);
         });
 
         // Ensure properties have tenants populated as strings, safely handle missing tenants
@@ -56,21 +75,35 @@ const LandlordDashboard = () => {
         setProperties(updatedProperties);
         setTenants(tenantsByProperty);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err.message || 'An error occurred while fetching data');
+        console.error('Error fetching landlord data:', err);
+        setError(err.message || 'An error occurred while fetching landlord data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, []); // No dependencies needed since token is fetched from localStorage
+    fetchLandlordData();
+  }, []);
 
   const handlePropertyAdded = (newProperty) => {
-    setProperties(prevProperties => [newProperty, ...prevProperties]);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Please log in to add a property.');
+      return;
+    }
+    const decodedToken = jwtDecode(token);
+    const landlordId = decodedToken.id; // Adjust based on your JWT structure
+    const propertyWithLandlord = { ...newProperty, landlordId }; // Add landlordId to the property
+    setProperties(prevProperties => [propertyWithLandlord, ...prevProperties]);
+    // You might need to call an API to save this to the backend
   };
 
   const handleTenantAdded = (newTenant) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Please log in to add a tenant.');
+      return;
+    }
     setTenants(prevTenants => ({
       ...prevTenants,
       [newTenant.property?._id?.toString() || '']: [...(prevTenants[newTenant.property?._id?.toString() || ''] || []), newTenant]
@@ -80,6 +113,7 @@ const LandlordDashboard = () => {
         ? { ...p, tenants: [...(p.tenants || []), newTenant._id?.toString() || ''] } 
         : p
     ));
+    // You might need to call an API to save this to the backend
   };
 
   const handleNavigation = (section) => {

@@ -1,37 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // Ensure this is imported
-import '../styles/App.css'; // Ensure this matches your wireframe styling
+import { useNavigate } from 'react-router-dom'; // Import useNavigate for navigation
+import { jwtDecode } from 'jwt-decode'; // Import jwt-decode for token decoding
 
 const TenantDashboard = () => {
+  const navigate = useNavigate(); // Initialize navigate for routing
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
-  const token = localStorage.getItem('token');
 
   useEffect(() => {
-    const fetchLeasedProperties = async () => {
+    const fetchTenantData = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:5001/properties/tenant', {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found. Please log in.');
+        }
+
+        // Decode the JWT token to get the tenant's ID and role
+        const decodedToken = jwtDecode(token);
+        const tenantId = decodedToken.id; // Adjust this based on your JWT structure (e.g., 'id', 'userId', or 'tenantId')
+        const role = decodedToken.role || decodedToken.accountType; // Ensure role is correctly extracted
+        if (role !== 'tenant') {
+          throw new Error('Unauthorized: Only tenants can access this dashboard.');
+        }
+
+        console.log('Fetching data for tenant ID:', tenantId);
+
+        // Fetch properties specific to the tenant
+        const propertiesResponse = await fetch(`http://localhost:5001/properties?tenantId=${tenantId}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
-        if (!response.ok) {
-          throw new Error('Failed to fetch leased properties');
+        if (!propertiesResponse.ok) {
+          throw new Error(`Failed to fetch properties: ${propertiesResponse.status} ${propertiesResponse.statusText}`);
         }
-        const data = await response.json();
-        setProperties(data);
+        const propertiesData = await propertiesResponse.json();
+        console.log('Properties fetched:', propertiesData);
+
+        setProperties(propertiesData);
       } catch (err) {
-        console.error('Error fetching leased properties:', err);
-        setError(err.message);
+        console.error('Error fetching tenant data:', err);
+        setError(err.message || 'An error occurred while fetching tenant data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLeasedProperties();
-  }, [token]);
+    fetchTenantData();
+  }, []);
 
   const handlePropertyClick = (propertyId) => {
     navigate(`/properties/${propertyId}`);
@@ -48,15 +64,15 @@ const TenantDashboard = () => {
   };
 
   if (loading) return <div className="loading">Loading...</div>;
-  if (error) return <div className="error">Error: {error}</div>;
+  if (error) return <div className="error">{error}</div>;
 
   return (
     <div className="dashboard-container">
       <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="header-actions">
           <button 
             onClick={handleHome}
-            className="logout-button" // Use logout-button class for consistency
+            className="logout-button"
           >
             Home
           </button>
@@ -69,23 +85,25 @@ const TenantDashboard = () => {
           Logout
         </button>
       </header>
-      {properties.length > 0 ? (
-        <div className="properties-grid">
-          {properties.map(property => (
-            <div
-              key={property._id}
-              className="property-card"
-              onClick={() => handlePropertyClick(property._id)}
-            >
-              <h3>{property.address}</h3>
-              <p>Status: {property.status || 'N/A'}</p>
-              <p>Rent Amount: ${property.rentAmount || 'N/A'}</p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p>No leased properties found.</p>
-      )}
+      <nav className="sidebar">
+        {properties.length > 0 ? (
+          <div className="property-grid">
+            {properties.map(property => (
+              <div
+                key={property._id}
+                className="property-card"
+                onClick={() => handlePropertyClick(property._id)}
+              >
+                <h3>{property.address}</h3>
+                <p>Status: {property.status || 'N/A'}</p>
+                <p>Rent Amount: ${property.rentAmount || 'N/A'}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No leased properties found.</p>
+        )}
+      </nav>
     </div>
   );
 };
